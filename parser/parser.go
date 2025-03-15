@@ -7,15 +7,35 @@ import (
 	"monkey-project/token"
 )
 
+// 아래의 상수로부터 얻고자 하는 것
+// * 연산자가 == 연산자보다 우선순위가 높은가?
+// 전위 연산자가 호출 표현식 보다 우선순위가 높은가?
+const (
+	_ int = iota // 뒤에 나오는 상수에게 1씩 증가하는 숫자를 값으로 제공(_는 0)
+	// 연산자 우선 순윈
+	LOWEST
+	EQUALS
+	LESSGREATER
+	SUM
+	PRODUCT
+	PREFIX
+	CALL
+)
+
 type Parser struct {
-	l         *lexer.Lexer
-	errors    []string
-	curToken  token.Token
-	peekToken token.Token
+	l             *lexer.Lexer
+	errors        []string
+	curToken      token.Token
+	peekToken     token.Token
+	prefixParseFn map[token.TokenType]prefixParseFn
+	infixParseFn  map[token.TokenType]infixParseFn
 }
 
 func New(l *lexer.Lexer) *Parser {
 	p := &Parser{l: l, errors: []string{}}
+	p.prefixParseFn = make(map[token.TokenType]prefixParseFn)
+	p.registerPrefix(token.IDENT, p.parseIdentifier)
+
 	p.nextToken()
 	p.nextToken()
 	return p
@@ -23,6 +43,11 @@ func New(l *lexer.Lexer) *Parser {
 
 func (p *Parser) Errors() []string {
 	return p.errors
+}
+
+func (p *Parser) parseIdentifier() ast.Expression {
+	// nextToken 호출 x
+	return &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 }
 
 func (p *Parser) peekError(t token.TokenType) {
@@ -56,7 +81,7 @@ func (p *Parser) parseStatement() ast.Statement {
 	case token.RETURN:
 		return p.parseReturnStatement()
 	default:
-		return nil
+		return p.parseExpressionStatement()
 	}
 }
 
@@ -108,4 +133,37 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 	}
 
 	return stmt
+}
+
+func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
+	p.prefixParseFn[tokenType] = fn
+}
+
+func (p *Parser) registerInfix(tokenType token.TokenType, fn infixParseFn) {
+	p.infixParseFn[tokenType] = fn
+}
+
+type (
+	prefixParseFn func() ast.Expression
+	infixParseFn  func(ast.Expression) ast.Expression
+)
+
+func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
+	stmt := &ast.ExpressionStatement{Token: p.curToken}
+	stmt.Expression = p.parseExpression(LOWEST)
+
+	if p.peekTokenIs(token.SEMICOLON) { // 세미콜론은 선택적으로 사용할 수 있도록 함(REPL에서 간편하게 입력할 수 있음)
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+func (p *Parser) parseExpression(precedence int) ast.Expression {
+	prefix := p.prefixParseFn[p.curToken.Type]
+	if prefix == nil {
+		return nil
+	}
+	leftExp := prefix()
+	return leftExp
 }
