@@ -1,6 +1,9 @@
 package evaluator
 
-import "monkey-project/object"
+import (
+	"fmt"
+	"monkey-project/object"
+)
 
 var builtins = map[string]*object.Builtin{
 	"len": &object.Builtin{
@@ -85,6 +88,14 @@ var builtins = map[string]*object.Builtin{
 			newElements := append(array.Elements, args[1])
 			// Monkey언어에서 배열은 불변성 가지므로 새로운 배열을 만들어서 반환
 			return &object.Array{Elements: newElements}
+		},
+	},
+	"puts": &object.Builtin{
+		Fn: func(args ...object.Object) object.Object {
+			for _, arg := range args {
+				fmt.Println(arg.Inspect())
+			}
+			return NULL
 		},
 	},
 }
